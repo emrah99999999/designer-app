@@ -1,0 +1,64 @@
+name: Build Designer APK
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Create web directory
+        run: |
+          mkdir -p www
+          cp index.html www/
+          # اگر فایل‌های CSS/JS جدا داشتید، آن‌ها را هم کپی کنید
+
+      - name: Install Capacitor
+        run: |
+          npm install -g @capacitor/cli
+          npm init -y
+          npm install @capacitor/core @capacitor/android
+
+      - name: Initialize Capacitor & Android
+        run: |
+          npx cap init Designer com.example.designer --web-dir www
+          npx cap add android
+          npx cap sync
+
+      - name: Fix Kotlin version conflict
+        run: |
+          sed -i 's/ext.kotlin_version = .*/ext.kotlin_version = "1.9.22"/' android/build.gradle
+          echo '' >> android/app/build.gradle
+          echo 'configurations.all {' >> android/app/build.gradle
+          echo '    resolutionStrategy {' >> android/app/build.gradle
+          echo '        force "org.jetbrains.kotlin:kotlin-stdlib:1.9.22"' >> android/app/build.gradle
+          echo '        force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22"' >> android/app/build.gradle
+          echo '        force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22"' >> android/app/build.gradle
+          echo '    }' >> android/app/build.gradle
+          echo '}' >> android/app/build.gradle
+
+      - name: Build APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: designer-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
